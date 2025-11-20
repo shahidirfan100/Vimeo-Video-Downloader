@@ -169,7 +169,7 @@ def _guess_content_type(extension: str | None) -> str:
         ext = f'.{ext}'
     return CONTENT_TYPE_BY_EXTENSION.get(ext, 'application/octet-stream')
 
-def get_ydl_opts(download_mode: str, quality: str, proxy_url: str = None, max_items: int = 0, cookies: str = None) -> Dict[str, Any]:
+def get_ydl_opts(download_mode: str, quality: str, proxy_url: str = None, max_items: int = 0) -> Dict[str, Any]:
     """
     Build yt-dlp options based on input parameters.
 
@@ -178,7 +178,6 @@ def get_ydl_opts(download_mode: str, quality: str, proxy_url: str = None, max_it
         quality: Quality preference
         proxy_url: Optional proxy URL
         max_items: Maximum items to extract from playlists
-        cookies: Optional cookies string
 
     Returns:
         yt-dlp options dictionary
@@ -200,10 +199,6 @@ def get_ydl_opts(download_mode: str, quality: str, proxy_url: str = None, max_it
     # Only add proxy if explicitly provided
     if proxy_url:
         opts['proxy'] = proxy_url
-
-    # Add cookies if provided
-    if cookies:
-        opts['cookiefile'] = cookies
 
     return opts
 
@@ -314,7 +309,7 @@ async def process_url(
         Actor.log.info(f"Processing: {url}")
 
         # Get yt-dlp options
-        opts = get_ydl_opts(download_mode, quality, proxy_url, max_items, cookies)
+        opts = get_ydl_opts(download_mode, quality, proxy_url, max_items)
 
         # Use temp directory for cookie file if provided
         temp_dir = None
@@ -486,7 +481,7 @@ async def download_video_file(
     quality = quality or 'best'
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        opts = get_ydl_opts('videos', quality, proxy_url, 0, cookies)
+        opts = get_ydl_opts('videos', quality, proxy_url, 0)
         opts['outtmpl'] = os.path.join(temp_dir, '%(id)s.%(ext)s')
 
         # Set format based on quality preference
@@ -571,7 +566,7 @@ async def process_urls(
         active_proxy_url = proxy_url
         if proxy_configuration is not None:
             try:
-                fresh_url = proxy_configuration.new_url()
+                fresh_url = await proxy_configuration.new_url()
                 active_proxy_url = fresh_url or proxy_url
             except Exception as proxy_error:
                 Actor.log.warning(f"Unable to obtain fresh proxy URL: {proxy_error}")
@@ -678,7 +673,7 @@ async def main() -> None:
                 else:
                     proxy_configuration = await Actor.create_proxy_configuration()
                 if proxy_configuration:
-                    proxy_url = proxy_configuration.new_url()
+                    proxy_url = await proxy_configuration.new_url()
                     Actor.log.info("Using Apify proxy configuration")
             except Exception as proxy_error:
                 Actor.log.warning(f"Unable to initialize proxy configuration: {proxy_error}")
