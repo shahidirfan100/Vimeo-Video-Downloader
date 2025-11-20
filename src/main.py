@@ -61,6 +61,20 @@ BASE_YDL_OPTS = {
     'merge_output_format': 'mp4',
     'retries': 3,
     'fragment_retries': 3,
+    # Add headers to mimic a real browser for Vimeo
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Cache-Control': 'max-age=0',
+    },
 }
 
 # Quality labels retained for reference (fallback helper uses these)
@@ -337,7 +351,12 @@ async def process_url(
             if not info:
                 raise ValueError(f"Could not extract info for {url}")
         except Exception as e:
-            Actor.log.error(f"Failed to extract info for {url}: {e}")
+            error_msg = str(e)
+            # Check for authentication-related errors
+            if "logged-in" in error_msg.lower() or "authentication" in error_msg.lower() or "cookies" in error_msg.lower():
+                Actor.log.error(f"Vimeo authentication required for {url}. Please provide cookies.")
+            else:
+                Actor.log.error(f"Failed to extract info for {url}: {e}")
             raise
 
         # Handle different types of content
@@ -393,6 +412,7 @@ async def process_single_video(
         download_mode: 'videos' or 'metadata_only'
         quality: Quality preference
         proxy_url: Optional proxy URL
+        cookies: Optional cookies string
 
     Returns:
         Metadata dictionary
@@ -558,6 +578,7 @@ async def process_urls(
         max_items: Maximum items to process
         proxy_url: Optional proxy URL to use for downloading
         proxy_configuration: Optional Apify ProxyConfiguration object for rotating proxies
+        cookies: Optional cookies string
     """
     total_processed = 0
     total_success = 0
@@ -713,6 +734,8 @@ async def main() -> None:
         cookies = inp.get('cookies')
         if cookies:
             Actor.log.info('Cookies provided in input — will use for authenticated downloads')
+        else:
+            Actor.log.warning('No authentication method provided. Vimeo may require login for some videos.')
 
         # Process the URLs
         await process_urls(

@@ -2,7 +2,7 @@
     "actorSpecification": 1,
     "name": "vimeo-video-downloader",
     "title": "Vimeo Video Downloader",
-    "description": "Downloads Vimeo videos and extracts comprehensive metadata using yt-dlp. Supports single videos or batch downloads, storing videos in key-value store and metadata in dataset. Includes error handling, rate limiting, and async processing.",
+    "description": "Download Vimeo videos with comprehensive metadata extraction and direct download links. Perfect for content archiving, research, and media analysis. Supports authentication, multiple quality options, and batch processing.",
     "version": "1.0.0",
     "buildTag": "latest",
     "meta": {
