@@ -36,7 +36,7 @@ This powerful Vimeo video downloader extracts videos from Vimeo URLs and provide
 | `downloadMode` | string | ❌ | `"videos"` | Download mode: `"videos"` to download full videos, `"metadata_only"` to extract metadata without downloading |
 | `quality` | string | ❌ | `"best"` | Video quality preference: `"best"`, `"720p"`, `"1080p"`, or `"audio_only"` |
 | `maxItems` | integer | ❌ | `10` | Maximum number of videos to process from playlists/channels (0 = unlimited) |
-| `cookies` | string | ❌ | - | Vimeo authentication cookies (JSON or Netscape format) |
+| `cookies` | string | ❌ | - | Vimeo authentication cookies. Supports JSON, Netscape, or raw cookie string formats |
 | `proxyConfiguration` | object | ❌ | - | Proxy settings for downloading videos |
 
 ## 📤 Output Format
@@ -87,7 +87,7 @@ The actor outputs structured JSON data for each processed video:
 ```json
 {
   "urls": "https://vimeo.com/352492210",
-  "cookies": "{\"vimeo.com\": {\"session\": \"your-session-cookie\", \"vuid\": \"your-vuid-cookie\"}}",
+  "cookies": "session=your_session_cookie_here; vuid=your_vuid_cookie_here; __cfruid=your_cfruid_if_present",
   "quality": "1080p"
 }
 ```
@@ -123,12 +123,21 @@ The actor outputs structured JSON data for each processed video:
 
 ### Authentication Methods
 
-Choose the authentication method that works best for your use case:
+For private or login-required Vimeo videos, provide authentication cookies:
 
-1. **Cookies** (Recommended for private videos):
-   - Export cookies from your browser's developer tools
-   - Supports both JSON and Netscape formats
-   - Most reliable for accessing private content
+**How to get cookies:**
+1. Open Vimeo in Chrome/Firefox and log in to your account
+2. Press F12 → Network tab
+3. Visit any Vimeo video page
+4. Right-click any network request → Copy → Copy as cURL
+5. Extract the `Cookie:` header value from the cURL command
+6. Paste the cookie string directly (format: `session=abc123; vuid=def456; ...`)
+
+**Supported cookie formats:**
+- Raw cookie string: `session=abc123; vuid=def456`
+- JSON array: `[{"name": "session", "value": "abc123", "domain": ".vimeo.com"}]`
+- JSON object: `{"session": "abc123", "vuid": "def456"}`
+- Netscape format (from browser export)
 
 ### Proxy Configuration
 

@@ -74,6 +74,7 @@ BASE_YDL_OPTS = {
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'none',
         'Cache-Control': 'max-age=0',
+        'Referer': 'https://vimeo.com/',
     },
 }
 
@@ -94,21 +95,20 @@ def _build_format_candidates(quality: str | None) -> List[str]:
         candidates = ['bestaudio/best', 'best']
     elif q in {'1080p', '1080'}:
         candidates = [
-            'bestvideo*[height<=1080][fps<=60]+bestaudio/best[height<=1080]',
-            'bestvideo*[height<=1080]+bestaudio/best',
-            'bestvideo[height<=1440]+bestaudio/best',
+            'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
+            'bestvideo[height<=1080]+bestaudio/best',
+            'best[height<=1080]',
             'best',
         ]
     elif q in {'720p', '720'}:
         candidates = [
-            'bestvideo*[height<=720][fps<=60]+bestaudio/best[height<=720]',
-            'bestvideo*[height<=720]+bestaudio/best',
-            'bestvideo[height<=1080]+bestaudio/best',
+            'bestvideo[height<=720]+bestaudio/best[height<=720]',
+            'bestvideo[height<=720]+bestaudio/best',
+            'best[height<=720]',
             'best',
         ]
     else:
         candidates = [
-            'bestvideo*+bestaudio/best',
             'bestvideo+bestaudio/best',
             'best',
         ]
@@ -219,23 +219,27 @@ def get_ydl_opts(download_mode: str, quality: str, proxy_url: str = None, max_it
 
 def _convert_json_cookies_to_netscape(json_cookies: str) -> str:
     """
-    Convert JSON cookies to Netscape format for yt-dlp.
+    Convert various cookie formats to Netscape format for yt-dlp.
 
     Args:
-        json_cookies: Cookies in JSON format
+        json_cookies: Cookies in various formats (JSON, Netscape, raw cookie string)
 
     Returns:
         Cookies in Netscape format
     """
-    if not json_cookies:
+    if not json_cookies or not json_cookies.strip():
         return ''
 
+    # If already Netscape format
     if "# Netscape HTTP Cookie File" in json_cookies:
+        Actor.log.debug("Cookies already in Netscape format")
         return json_cookies
 
+    # Try to parse as JSON first
     try:
         import json
-        cookies_data = json.loads(json_cookies)
+        cookies_data = json.loads(json_cookies.strip())
+        Actor.log.debug(f"Parsed cookies as JSON: {type(cookies_data)}")
 
         # Netscape format header
         netscape_cookies = [
@@ -247,24 +251,94 @@ def _convert_json_cookies_to_netscape(json_cookies: str) -> str:
 
         # Handle different JSON formats
         if isinstance(cookies_data, list):
+            Actor.log.debug(f"Processing {len(cookies_data)} cookies from list")
             for cookie in cookies_data:
                 if isinstance(cookie, dict):
                     netscape_line = _format_cookie_as_netscape(cookie)
                     if netscape_line:
                         netscape_cookies.append(netscape_line)
-        elif isinstance(cookies_data, dict) and 'name' in cookies_data:
-            netscape_line = _format_cookie_as_netscape(cookies_data)
-            if netscape_line:
-                netscape_cookies.append(netscape_line)
+        elif isinstance(cookies_data, dict):
+            if 'name' in cookies_data:
+                # Single cookie object
+                netscape_line = _format_cookie_as_netscape(cookies_data)
+                if netscape_line:
+                    netscape_cookies.append(netscape_line)
+            else:
+                # Dictionary of domains -> cookies
+                for domain, domain_cookies in cookies_data.items():
+                    if isinstance(domain_cookies, list):
+                        for cookie in domain_cookies:
+                            if isinstance(cookie, dict):
+                                cookie['domain'] = cookie.get('domain', domain)
+                                netscape_line = _format_cookie_as_netscape(cookie)
+                                if netscape_line:
+                                    netscape_cookies.append(netscape_line)
+                    elif isinstance(domain_cookies, dict):
+                        domain_cookies['domain'] = domain_cookies.get('domain', domain)
+                        netscape_line = _format_cookie_as_netscape(domain_cookies)
+                        if netscape_line:
+                            netscape_cookies.append(netscape_line)
 
-        return '\n'.join(netscape_cookies)
+        result = '\n'.join(netscape_cookies)
+        Actor.log.debug(f"Converted to Netscape format with {len(netscape_cookies)-4} cookies")
+        return result
 
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
-        Actor.log.warning(f"Failed to parse JSON cookies: {e}. Assuming already Netscape format.")
-        return json_cookies
+    except json.JSONDecodeError:
+        # Not JSON, try to parse as raw cookie string
+        Actor.log.debug("Cookies not JSON, trying raw cookie string format")
+        return _parse_raw_cookie_string(json_cookies)
+    except Exception as e:
+        Actor.log.warning(f"Failed to parse cookies: {e}. Trying raw format.")
+        return _parse_raw_cookie_string(json_cookies)
 
 
-def _format_cookie_as_netscape(cookie: Dict[str, Any]) -> str:
+def _parse_raw_cookie_string(cookie_string: str) -> str:
+    """
+    Parse raw cookie string (from browser export or manual entry) into Netscape format.
+
+    Args:
+        cookie_string: Raw cookie string
+
+    Returns:
+        Cookies in Netscape format
+    """
+    if not cookie_string or not cookie_string.strip():
+        return ''
+
+    lines = cookie_string.strip().split('\n')
+    netscape_cookies = [
+        "# Netscape HTTP Cookie File",
+        "# https://curl.se/docs/http-cookies.html",
+        "# This file was generated by Vimeo Video Downloader Actor",
+        ""
+    ]
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+
+        # Try to parse different formats
+        parts = line.split('\t')
+        if len(parts) >= 7:  # Already Netscape format
+            netscape_cookies.append(line)
+        else:
+            # Try semicolon-separated format (name=value; name=value)
+            cookies = {}
+            for pair in line.split(';'):
+                pair = pair.strip()
+                if '=' in pair:
+                    name, value = pair.split('=', 1)
+                    cookies[name.strip()] = value.strip()
+
+            if cookies:
+                # Create a basic Netscape line for each cookie
+                for name, value in cookies.items():
+                    # Basic Netscape format with defaults
+                    netscape_line = f".vimeo.com\tTRUE\t/\tFALSE\t2147483647\t{name}\t{value}"
+                    netscape_cookies.append(netscape_line)
+
+    return '\n'.join(netscape_cookies)
     """
     Format a single cookie dict as Netscape format line.
 
@@ -333,10 +407,14 @@ async def process_url(
             cookie_path = os.path.join(temp_dir, 'cookies.txt')
             try:
                 netscape_cookies = _convert_json_cookies_to_netscape(cookies)
-                with open(cookie_path, 'w', encoding='utf-8') as cf:
-                    cf.write(netscape_cookies)
-                opts['cookiefile'] = cookie_path
-                Actor.log.info('Using provided cookies for authenticated extraction')
+                if netscape_cookies and len(netscape_cookies.strip()) > 0:
+                    with open(cookie_path, 'w', encoding='utf-8') as cf:
+                        cf.write(netscape_cookies)
+                    opts['cookiefile'] = cookie_path
+                    Actor.log.info('Using provided cookies for authenticated extraction')
+                    Actor.log.debug(f'Cookie file created at: {cookie_path}')
+                else:
+                    Actor.log.warning('Cookies provided but could not convert to valid format')
             except Exception as e:
                 Actor.log.warning(f'Could not write cookies file: {e}')
                 cookie_path = None
@@ -509,7 +587,7 @@ async def download_video_file(
             opts['format'] = 'bestaudio/best'
         else:
             format_candidates = _build_format_candidates(quality)
-            opts['format'] = format_candidates[0]  # Use first (best) candidate
+            opts['format'] = '/'.join(format_candidates)  # Try all candidates in order
 
         # Handle cookies
         if cookies:
@@ -689,7 +767,10 @@ async def main() -> None:
                 if proxy_input:
                     # Filter out invalid parameters that the SDK doesn't accept
                     valid_proxy_params = {k: v for k, v in proxy_input.items() 
-                                        if k not in ['useApifyProxy']}
+                                        if k not in ['useApifyProxy', 'apifyProxyGroups']}
+                    # Handle apifyProxyGroups specially - map it to 'groups'
+                    if 'apifyProxyGroups' in proxy_input:
+                        valid_proxy_params['groups'] = proxy_input['apifyProxyGroups']
                     proxy_configuration = await Actor.create_proxy_configuration(**valid_proxy_params)
                 else:
                     proxy_configuration = await Actor.create_proxy_configuration()
@@ -734,6 +815,21 @@ async def main() -> None:
         cookies = inp.get('cookies')
         if cookies:
             Actor.log.info('Cookies provided in input — will use for authenticated downloads')
+            # Log cookie format for debugging (without sensitive values)
+            try:
+                import json
+                parsed = json.loads(cookies)
+                if isinstance(parsed, list):
+                    Actor.log.info(f'Cookies parsed as JSON array with {len(parsed)} entries')
+                elif isinstance(parsed, dict):
+                    Actor.log.info(f'Cookies parsed as JSON object with keys: {list(parsed.keys())}')
+                else:
+                    Actor.log.info('Cookies parsed as other JSON format')
+            except:
+                if '# Netscape' in cookies:
+                    Actor.log.info('Cookies provided in Netscape format')
+                else:
+                    Actor.log.info('Cookies provided as raw string format')
         else:
             Actor.log.warning('No authentication method provided. Vimeo may require login for some videos.')
 

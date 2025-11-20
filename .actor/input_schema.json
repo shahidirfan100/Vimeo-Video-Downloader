@@ -40,7 +40,7 @@
     "cookies": {
       "title": "Vimeo Cookies (JSON)",
       "type": "string",
-      "description": "Vimeo authentication cookies in JSON format. Export cookies from your browser's developer tools (Network tab) and paste the JSON here. Required for private videos or when Vimeo requires authentication.\n\n**How to get cookies:**\n1. Open Vimeo in Chrome/Firefox\n2. Press F12 → Network tab\n3. Visit a Vimeo video page\n4. Right-click any request → Copy → Copy as cURL\n5. Extract the Cookie header from the cURL command\n6. Convert to JSON format if needed",
+      "description": "Vimeo authentication cookies. Required for private videos or when Vimeo requires authentication.\n\n**Supported formats:**\n1. **JSON Array**: `[{\"name\": \"session\", \"value\": \"...\", \"domain\": \".vimeo.com\"}, ...]`\n2. **JSON Object**: `{\"name\": \"session\", \"value\": \"...\", \"domain\": \".vimeo.com\"}`\n3. **Raw Cookie String**: `session=abc123; vuid=def456; ...`\n4. **Netscape Format**: Already formatted cookie file\n\n**How to get cookies:**\n1. Open Vimeo in Chrome/Firefox and log in\n2. Press F12 → Network tab\n3. Visit a Vimeo video page\n4. Right-click any request → Copy → Copy as cURL\n5. Extract the Cookie header value from the cURL command\n6. Paste the cookie string here (format: name=value; name=value)",
       "editor": "textarea"
     },
     "proxyConfiguration": {
