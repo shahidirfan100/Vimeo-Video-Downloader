@@ -1,0 +1,78 @@
+{
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "title",
+          "author",
+          "publish_date",
+          "duration",
+          "view_count",
+          "like_count",
+          "url",
+          "file_path",
+          "quality_requested",
+          "downloaded_format",
+          "file_size",
+          "collected_at"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "title": {
+            "label": "Video Title",
+            "format": "text"
+          },
+          "author": {
+            "label": "Author",
+            "format": "text"
+          },
+          "publish_date": {
+            "label": "Published",
+            "format": "text"
+          },
+          "duration": {
+            "label": "Duration (seconds)",
+            "format": "number"
+          },
+          "view_count": {
+            "label": "Views",
+            "format": "number"
+          },
+          "like_count": {
+            "label": "Likes",
+            "format": "number"
+          },
+          "url": {
+            "label": "Vimeo URL",
+            "format": "link"
+          },
+          "file_path": {
+            "label": "File Path",
+            "format": "text"
+          },
+          "quality_requested": {
+            "label": "Quality Requested",
+            "format": "text"
+          },
+          "downloaded_format": {
+            "label": "Format Used",
+            "format": "text"
+          },
+          "file_size": {
+            "label": "File Size (bytes)",
+            "format": "number"
+          },
+          "collected_at": {
+            "label": "Downloaded At",
+            "format": "text"
+          }
+        }
+      }
+    }
+  }
+}

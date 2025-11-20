@@ -1,0 +1,55 @@
+{
+  "title": "Vimeo Video Downloader Input",
+  "description": "Download Vimeo videos and extract metadata. Supports single videos, playlists, and channels. Can download full videos or extract metadata only.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "urls": {
+      "title": "Vimeo URLs",
+  "description": "Vimeo URL(s) to process. You can provide:\n- A single URL\n- Multiple URLs one per line\n- Comma-separated URLs\n- JSON array format: [\"url1\", \"url2\"]\n\nExamples:\nSingle: https://vimeo.com/VIDEO_ID\nMultiple lines:\nhttps://vimeo.com/123\nhttps://vimeo.com/456\nJSON: [\"https://vimeo.com/...\", \"https://vimeo.com/...\"]",
+  "type": "string",
+  "editor": "textarea",
+  "prefill": "https://vimeo.com/123456789"
+    },
+    "downloadMode": {
+      "title": "Download Mode",
+      "type": "string",
+      "description": "Choose whether to download full videos or extract metadata only.",
+      "enum": ["videos", "metadata_only"],
+      "enumTitles": ["Download Videos", "Metadata Only"],
+      "default": "videos",
+      "editor": "select"
+    },
+    "maxItems": {
+      "title": "Maximum Items",
+      "type": "integer",
+      "description": "Maximum number of videos to process from playlists or channels. Set to 0 for unlimited (not recommended for large playlists).",
+      "minimum": 0,
+      "default": 10,
+      "editor": "number"
+    },
+    "quality": {
+      "title": "Video Quality",
+      "type": "string",
+  "description": "Preferred video quality/format. Only applies when downloading videos. The actor automatically falls back to lower or best available qualities if the requested one is missing.",
+      "enum": ["best", "720p", "1080p", "audio_only"],
+      "enumTitles": ["Best Available", "Up to 720p", "Up to 1080p", "Audio Only (MP3)"],
+      "default": "best",
+      "editor": "select"
+    },
+    "cookies": {
+      "title": "Vimeo Cookies (optional)",
+      "type": "string",
+      "description": "Optional cookies to bypass Vimeo authentication. Accepts both JSON format (from browser dev tools) and Netscape format. JSON cookies will be automatically converted. Leave empty if videos are publicly accessible.",
+      "editor": "textarea"
+    },
+    "proxyConfiguration": {
+      "title": "Proxy Configuration",
+      "type": "object",
+      "description": "Proxy settings for downloading Vimeo videos. Recommended to use Apify Proxy to avoid potential rate limiting or IP blocking.",
+      "editor": "proxy",
+      "default": {}
+    }
+  },
+  "required": ["urls"]
+}

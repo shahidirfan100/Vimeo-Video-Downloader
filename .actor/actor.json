@@ -1,0 +1,18 @@
+{
+    "actorSpecification": 1,
+    "name": "vimeo-video-downloader",
+    "title": "Vimeo Video Downloader",
+    "description": "Downloads Vimeo videos and extracts comprehensive metadata using yt-dlp. Supports single videos or batch downloads, storing videos in key-value store and metadata in dataset. Includes error handling, rate limiting, and async processing.",
+    "version": "1.0.0",
+    "buildTag": "latest",
+    "meta": {
+        "templateId": "python-yt-dlp-downloader",
+        "model": "claude-3.5-sonnet"
+    },
+    "input": "./input_schema.json",
+    "output": "./output_schema.json",
+    "storages": {
+        "dataset": "./dataset_schema.json"
+    },
+    "dockerfile": "../Dockerfile"
+}
