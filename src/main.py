@@ -339,14 +339,17 @@ def _parse_raw_cookie_string(cookie_string: str) -> str:
                     netscape_cookies.append(netscape_line)
 
     return '\n'.join(netscape_cookies)
+
+
+def _format_cookie_as_netscape(cookie: Dict[str, Any]) -> str | None:
     """
-    Format a single cookie dict as Netscape format line.
+    Format a single cookie dict as a Netscape-format cookie line.
 
     Args:
-        cookie: Cookie dictionary
+        cookie: Cookie dictionary with typical fields (name, value, domain, path, secure, httpOnly, expires)
 
     Returns:
-        Netscape format line or None if invalid
+        A Netscape-format cookie line or None if the cookie is invalid
     """
     try:
         domain = cookie.get('domain') or '.vimeo.com'
@@ -362,7 +365,6 @@ def _parse_raw_cookie_string(cookie_string: str) -> str:
             return None
 
         return f"{http_only}{domain}\t{include_subdomains}\t{path}\t{secure_flag}\t{expires}\t{name}\t{value}"
-
     except Exception:
         return None
 
@@ -377,6 +379,7 @@ async def process_url(
     quality: str,
     max_items: int,
     proxy_url: str | None = None,
+    proxy_configuration: Any | None = None,
     cookies: str | None = None,
 ) -> List[Dict[str, Any]]:
     """
@@ -424,8 +427,48 @@ async def process_url(
         # Extract info using yt-dlp
         try:
             Actor.log.info(f"Extracting info for {url}")
+            if 'proxy' in opts:
+                Actor.log.info(f"Using proxy for extraction: {opts.get('proxy')}")
+            else:
+                Actor.log.debug("No proxy in use for extraction")
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
+        except Exception as e:
+            # Check for proxy-specific errors and attempt to retry without proxy once
+            msg = str(e)
+            if proxy_url and ('Unable to connect to proxy' in msg or 'Tunnel connection failed' in msg or 'ProxyError' in msg):
+                Actor.log.warning(f"Proxy error while extracting info: {e}. Attempting proxy rotation then falling back to direct connection.")
+                # Try rotating the Apify proxy configuration (if available)
+                if proxy_configuration:
+                    try:
+                        new_proxy_url = await proxy_configuration.new_url()
+                        Actor.log.info(f"Rotating to new proxy URL: {new_proxy_url}")
+                        opts_rotated = dict(opts)
+                        opts_rotated['proxy'] = new_proxy_url
+                        with yt_dlp.YoutubeDL(opts_rotated) as ydl:
+                            info = ydl.extract_info(url, download=False)
+                    except Exception as e_rot:
+                        Actor.log.warning(f"Rotated proxy failed: {e_rot}. Now retrying without proxy.")
+                        opts_no_proxy = dict(opts)
+                        opts_no_proxy.pop('proxy', None)
+                        try:
+                            with yt_dlp.YoutubeDL(opts_no_proxy) as ydl:
+                                info = ydl.extract_info(url, download=False)
+                        except Exception as e2:
+                            Actor.log.error(f"Retry without proxy failed: {e2}")
+                            raise
+                else:
+                    Actor.log.warning("No proxy_configuration available to rotate; retrying without proxy.")
+                    opts_no_proxy = dict(opts)
+                    opts_no_proxy.pop('proxy', None)
+                try:
+                    with yt_dlp.YoutubeDL(opts_no_proxy) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                except Exception as e2:
+                    Actor.log.error(f"Retry without proxy failed: {e2}")
+                    raise
+                else:
+                    raise
             if not info:
                 raise ValueError(f"Could not extract info for {url}")
         except Exception as e:
@@ -449,10 +492,10 @@ async def process_url(
 
             for entry in entries:
                 if entry:
-                    metadata = await process_single_video(entry, download_mode, quality, proxy_url, cookies)
+                    metadata = await process_single_video(entry, download_mode, quality, proxy_url, proxy_configuration, cookies)
                     results.append(metadata)
         else:
-            metadata = await process_single_video(info, download_mode, quality, proxy_url, cookies)
+            metadata = await process_single_video(info, download_mode, quality, proxy_url, proxy_configuration, cookies)
             results.append(metadata)
 
         return results
@@ -480,6 +523,7 @@ async def process_single_video(
     download_mode: str,
     quality: str,
     proxy_url: str | None = None,
+    proxy_configuration: Any | None = None,
     cookies: str | None = None,
 ) -> Dict[str, Any]:
     """
@@ -514,7 +558,7 @@ async def process_single_video(
 
         # Download video if requested
         if download_mode == 'videos':
-            video_data, extension, filename, used_format = await download_video_file(info, quality, proxy_url, cookies)
+            video_data, extension, filename, used_format = await download_video_file(info, quality, proxy_url, proxy_configuration, cookies)
             
             # Generate safe key for storage
             key = _generate_safe_key(info.get('id', 'unknown'), extension)
@@ -568,6 +612,7 @@ async def download_video_file(
     info: Dict[str, Any],
     quality: str,
     proxy_url: str | None = None,
+    proxy_configuration: Any | None = None,
     cookies: str | None = None,
 ) -> tuple[bytes, str, str, str]:
     """Download the video (or audio) and return its bytes, extension, filename, and format used."""
@@ -614,10 +659,62 @@ async def download_video_file(
         _clear_directory(temp_dir)
 
         Actor.log.info(f"Download using format '{opts['format']}'")
+        if 'proxy' in opts:
+            Actor.log.info(f"Using proxy for download: {opts.get('proxy')}")
+        else:
+            Actor.log.debug("No proxy in use for this download attempt")
 
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.download([url])
+        except Exception as e:
+            msg = str(e)
+            if proxy_url and ('Unable to connect to proxy' in msg or 'Tunnel connection failed' in msg or 'ProxyError' in msg):
+                Actor.log.warning(f"Proxy error while downloading: {e}. Attempting proxy rotation then falling back to direct connection.")
+                if proxy_configuration:
+                    try:
+                        new_proxy_url = await proxy_configuration.new_url()
+                        Actor.log.info(f"Rotating to new proxy URL: {new_proxy_url}")
+                        opts_rotated = dict(opts)
+                        opts_rotated['proxy'] = new_proxy_url
+                        with yt_dlp.YoutubeDL(opts_rotated) as ydl:
+                            ydl.download([url])
+                    except Exception as e_rot:
+                        Actor.log.warning(f"Rotated proxy failed: {e_rot}. Trying without proxy.")
+                        opts_no_proxy = dict(opts)
+                        opts_no_proxy.pop('proxy', None)
+                        try:
+                            with yt_dlp.YoutubeDL(opts_no_proxy) as ydl:
+                                ydl.download([url])
+                        except Exception as e2:
+                            Actor.log.error(f"Retry without proxy failed: {e2}")
+                            raise
+                else:
+                    Actor.log.warning("No proxy_configuration available to rotate; retrying without proxy.")
+                    opts_no_proxy = dict(opts)
+                    opts_no_proxy.pop('proxy', None)
+                    try:
+                        with yt_dlp.YoutubeDL(opts_no_proxy) as ydl:
+                            ydl.download([url])
+                    except Exception as e2:
+                        Actor.log.error(f"Retry without proxy failed: {e2}")
+                        raise
+            else:
+                raise
+        except Exception as e:
+            msg = str(e)
+            if proxy_url and ('Unable to connect to proxy' in msg or 'Tunnel connection failed' in msg or 'ProxyError' in msg):
+                Actor.log.warning(f"Proxy error while downloading: {e}. Retrying without proxy.")
+                opts_no_proxy = dict(opts)
+                opts_no_proxy.pop('proxy', None)
+                try:
+                    with yt_dlp.YoutubeDL(opts_no_proxy) as ydl:
+                        ydl.download([url])
+                except Exception as e2:
+                    Actor.log.error(f"Retry without proxy failed: {e2}")
+                    raise
+            else:
+                raise
 
             media_path = _find_downloaded_media(temp_dir)
             if not media_path:
@@ -673,7 +770,7 @@ async def process_urls(
 
         try:
             # Process URL (may return multiple items for playlists/channels)
-            results = await process_url(url, download_mode, quality, max_items, active_proxy_url, cookies)
+            results = await process_url(url, download_mode, quality, max_items, active_proxy_url, proxy_configuration, cookies)
 
             # Push each result to dataset
             for metadata in results:
