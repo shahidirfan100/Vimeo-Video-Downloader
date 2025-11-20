@@ -76,6 +76,12 @@ BASE_YDL_OPTS = {
         'Cache-Control': 'max-age=0',
         'Referer': 'https://vimeo.com/',
     },
+    # Use aria2 as an external downloader if available for parallel connections
+    # External downloader args: -x N connections, -s N split, -k chunk size
+    'external_downloader': 'aria2c',
+    'external_downloader_args': ['-x', '16', '-s', '16', '-k', '1M', '--no-conf'],
+    # Number of retries for overall operation; fewer retries will reduce time spent reattempting
+    'retries': 2,
 }
 
 # Quality labels retained for reference (fallback helper uses these)
@@ -742,6 +748,7 @@ async def process_urls(
     proxy_url: str | None = None,
     proxy_configuration: Any | None = None,
     cookies: str | None = None,
+    concurrency: int = 1,
 ) -> None:
     """
     Process a list of Vimeo URLs.
@@ -758,7 +765,12 @@ async def process_urls(
     total_processed = 0
     total_success = 0
 
-    for url in urls:
+    # Use a semaphore for controlled concurrency for URL processing
+    concurrency = max(1, int(concurrency or 1))
+    sem = asyncio.Semaphore(concurrency)
+
+    async def process_task(url: str) -> None:
+        nonlocal total_processed, total_success
         active_proxy_url = proxy_url
         if proxy_configuration is not None:
             try:
@@ -792,10 +804,16 @@ async def process_urls(
             await Actor.push_data(error_data)
 
         total_processed += 1
+        # brief pause between URLs to be respectful
+        await asyncio.sleep(0.1)
 
-        # Brief pause between URLs to be respectful
-        if total_processed < len(urls):
-            await asyncio.sleep(0.5)
+    async def _run_with_sem(url: str) -> None:
+        async with sem:
+            await process_task(url)
+
+    # Create tasks and run with concurrency control
+    tasks = [asyncio.create_task(_run_with_sem(url)) for url in urls]
+    await asyncio.gather(*tasks)
 
     Actor.log.info(f"Processing complete! Successfully processed {total_success} items")
 
@@ -838,7 +856,6 @@ async def main() -> None:
                     if len(lines) > 1:
                         urls = lines
                     else:
-                        # Try comma separated
                         parts = [p.strip() for p in s.split(',') if p.strip()]
                         if len(parts) > 1:
                             urls = parts
@@ -846,12 +863,6 @@ async def main() -> None:
                             urls = [s]
         else:
             urls = []
-
-        if not urls:
-            Actor.log.error("No URLs provided in input. Expected 'urls' field with string or list of Vimeo URLs.")
-            return
-
-        # Extract proxy configuration
         proxy_url: str | None = None
         proxy_configuration = None
         proxy_input = inp.get("proxyConfiguration") or {}
@@ -930,6 +941,13 @@ async def main() -> None:
         else:
             Actor.log.warning('No authentication method provided. Vimeo may require login for some videos.')
 
+        # Extract concurrency from input
+        try:
+            concurrency = int(inp.get('concurrency', 1))
+            concurrency = max(1, min(concurrency, 16))
+        except (ValueError, TypeError):
+            concurrency = 1
+
         # Process the URLs
         await process_urls(
             valid_urls,
@@ -939,6 +957,7 @@ async def main() -> None:
             proxy_url,
             proxy_configuration,
             cookies,
+            concurrency,
         )
 
 

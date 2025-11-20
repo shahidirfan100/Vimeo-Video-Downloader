@@ -49,7 +49,16 @@
       "description": "Proxy settings for downloading Vimeo videos. Recommended to use Apify Proxy to avoid potential rate limiting or IP blocking.",
       "editor": "proxy",
       "default": {}
-    }
+    },
+      "concurrency": {
+        "title": "Concurrency",
+        "type": "integer",
+        "description": "Number of URLs to process concurrently (1 = sequential). Increase to use multiple CPU/network resources. Recommended 1-4 for Apify small instances.",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 16,
+        "editor": "number"
+      }
   },
   "required": ["urls"]
 }

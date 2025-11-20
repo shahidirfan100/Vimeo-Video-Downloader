@@ -6,6 +6,7 @@ FROM apify/actor-python:3.13
 # Install ffmpeg as root user (required for merging video/audio streams)
 USER root
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y aria2 && rm -rf /var/lib/apt/lists/*
 
 USER myuser
 

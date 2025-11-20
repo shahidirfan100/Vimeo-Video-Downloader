@@ -38,6 +38,7 @@ This powerful Vimeo video downloader extracts videos from Vimeo URLs and provide
 | `maxItems` | integer | ❌ | `10` | Maximum number of videos to process from playlists/channels (0 = unlimited) |
 | `cookies` | string | ❌ | - | Vimeo authentication cookies. Supports JSON, Netscape, or raw cookie string formats |
 | `proxyConfiguration` | object | ❌ | - | Proxy settings for downloading videos |
+| `concurrency` | integer | ❌ | 1 | Number of concurrent URL tasks for processing (1 = sequential). Increase to parallelize downloads |
 
 ## 📤 Output Format
 
@@ -68,6 +69,7 @@ The actor outputs structured JSON data for each processed video:
 
 ### Download a Single Video
 
+ - Increase `concurrency` to parallelize URL processing when running large batches; start with 2-4 to balance throughput vs. connection limits
 ```json
 {
   "urls": "https://vimeo.com/352492210"
